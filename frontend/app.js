@@ -30,14 +30,14 @@ async function loadContacts() {
         const response = await fetch(`${API_BASE_URL}/contacts`);
 
         if (!response.ok) {
-            throw new Error('Failed to load contacts');
+            throw new Error('Kontakte konnten nicht geladen werden');
         }
 
         const contacts = await response.json();
         displayContacts(contacts);
         hideLoading();
     } catch (err) {
-        showError('Failed to load contacts: ' + err.message);
+        showError('Fehler beim Laden der Kontakte: ' + err.message);
         hideLoading();
     }
 }
@@ -63,8 +63,8 @@ function displayContacts(contacts) {
             <td>${escapeHtml(contact.phone2 || '-')}</td>
             <td>${escapeHtml(contact.phone3 || '-')}</td>
             <td>
-                <button class="btn btn-edit" onclick="editContact(${contact.id})">Edit</button>
-                <button class="btn btn-delete" onclick="deleteContact(${contact.id})">Delete</button>
+                <button class="btn btn-edit" onclick="editContact(${contact.id})">Bearbeiten</button>
+                <button class="btn btn-delete" onclick="deleteContact(${contact.id})">Löschen</button>
             </td>
         `;
         contactsBody.appendChild(row);
@@ -105,13 +105,13 @@ async function handleSubmit(e) {
         }
 
         if (!response.ok) {
-            throw new Error('Failed to save contact');
+            throw new Error('Kontakt konnte nicht gespeichert werden');
         }
 
         resetForm();
         loadContacts();
     } catch (err) {
-        showError('Failed to save contact: ' + err.message);
+        showError('Fehler beim Speichern des Kontakts: ' + err.message);
     }
 }
 
@@ -121,7 +121,7 @@ async function editContact(id) {
         const response = await fetch(`${API_BASE_URL}/contacts/${id}`);
 
         if (!response.ok) {
-            throw new Error('Failed to load contact');
+            throw new Error('Kontakt konnte nicht geladen werden');
         }
 
         const contact = await response.json();
@@ -134,20 +134,20 @@ async function editContact(id) {
 
         // Update UI state
         editingContactId = id;
-        formTitle.textContent = 'Edit Contact';
-        submitBtn.textContent = 'Update Contact';
+        formTitle.textContent = 'Kontakt bearbeiten';
+        submitBtn.textContent = 'Kontakt aktualisieren';
         cancelBtn.style.display = 'inline-block';
 
         // Scroll to form
         contactForm.scrollIntoView({ behavior: 'smooth' });
     } catch (err) {
-        showError('Failed to load contact for editing: ' + err.message);
+        showError('Fehler beim Laden des Kontakts zum Bearbeiten: ' + err.message);
     }
 }
 
 // Delete contact
 async function deleteContact(id) {
-    if (!confirm('Are you sure you want to delete this contact?')) {
+    if (!confirm('Möchten Sie diesen Kontakt wirklich löschen?')) {
         return;
     }
 
@@ -157,12 +157,12 @@ async function deleteContact(id) {
         });
 
         if (!response.ok) {
-            throw new Error('Failed to delete contact');
+            throw new Error('Kontakt konnte nicht gelöscht werden');
         }
 
         loadContacts();
     } catch (err) {
-        showError('Failed to delete contact: ' + err.message);
+        showError('Fehler beim Löschen des Kontakts: ' + err.message);
     }
 }
 
@@ -170,8 +170,8 @@ async function deleteContact(id) {
 function resetForm() {
     contactForm.reset();
     editingContactId = null;
-    formTitle.textContent = 'Add New Contact';
-    submitBtn.textContent = 'Add Contact';
+    formTitle.textContent = 'Neuen Kontakt hinzufügen';
+    submitBtn.textContent = 'Kontakt hinzufügen';
     cancelBtn.style.display = 'none';
 }
 

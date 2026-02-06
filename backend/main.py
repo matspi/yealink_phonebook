@@ -4,9 +4,11 @@ Main FastAPI application for the phonebook service.
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from typing import List
 import uvicorn
+import os
 
 from database import get_db, init_db
 from models import Contact
@@ -30,7 +32,7 @@ async def startup_event():
     init_db()
 
 
-@app.get("/")
+@app.get("/api")
 async def root():
     """Health check endpoint."""
     return {"status": "ok", "message": "Phonebook API is running"}
@@ -127,6 +129,12 @@ def _escape_xml(text: str) -> str:
             .replace(">", "&gt;")
             .replace('"', "&quot;")
             .replace("'", "&apos;"))
+
+
+# Mount static files for frontend (must be last to not override API routes)
+frontend_dir = os.path.join(os.path.dirname(__file__), "..", "frontend")
+if os.path.exists(frontend_dir):
+    app.mount("/", StaticFiles(directory=frontend_dir, html=True), name="frontend")
 
 
 if __name__ == "__main__":
