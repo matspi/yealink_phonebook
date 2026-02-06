@@ -20,7 +20,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration
-HOSTNAME="${1:-phonebook}"
+CT_HOSTNAME="${1:-phonebook}"              # Use CT_HOSTNAME to avoid conflicts with build.func
 GITHUB_REPO="https://github.com/matspi/yealink_phonebook.git"
 MEMORY=2048
 SWAP=512
@@ -101,18 +101,27 @@ find_debian_template() {
         template_storage="local"
     fi
 
-    # Look for Debian template
-    local template=$(pveam list "$template_storage" 2>/dev/null | grep -i "debian.*standard" | head -1 | awk '{print $2}')
+    # Look for Debian template - the filename is in the first column
+    local template=$(pveam list "$template_storage" 2>/dev/null | grep -i "debian.*standard" | head -1 | awk '{print $1}')
 
     if [ -z "$template" ]; then
         echo -e "${RED}Error: No Debian template found${NC}" >&2
+        echo -e "${YELLOW}Available templates:${NC}" >&2
+        pveam list "$template_storage" 2>/dev/null >&2
+        echo ""
         echo -e "${YELLOW}To download Debian 12 template, run:${NC}" >&2
         echo -e "  pveam update" >&2
         echo -e "  pveam download ${template_storage} debian-12-standard_12.12-1_amd64.tar.zst" >&2
         exit 1
     fi
 
-    echo "${template_storage}:vztmpl/${template}"
+    # Template is already in format "storage:vztmpl/filename.tar.zst" from pveam list
+    # Just need to ensure it has the storage prefix
+    if [[ "$template" == *":"* ]]; then
+        echo "$template"
+    else
+        echo "${template_storage}:vztmpl/${template}"
+    fi
 }
 
 # Auto-detect configuration
@@ -122,7 +131,7 @@ TEMPLATE=$(find_debian_template)
 
 echo -e "${GREEN}Configuration:${NC}"
 echo -e "  Container ID: ${BLUE}${CTID}${NC}"
-echo -e "  Hostname: ${BLUE}${HOSTNAME}${NC}"
+echo -e "  Hostname: ${BLUE}${CT_HOSTNAME}${NC}"
 echo -e "  Storage: ${BLUE}${STORAGE}${NC}"
 echo -e "  Template: ${BLUE}${TEMPLATE}${NC}"
 echo -e "  Memory: ${BLUE}${MEMORY}MB${NC}"
@@ -130,9 +139,13 @@ echo -e "  Disk: ${BLUE}${DISK_SIZE}GB${NC}"
 echo -e "  Cores: ${BLUE}${CORES}${NC}"
 echo ""
 
+# Debug: Show the exact pct create command that will be run
+echo -e "${BLUE}Running: pct create ${CTID} ${TEMPLATE} --hostname ${CT_HOSTNAME} ...${NC}"
+echo ""
+
 echo -e "${GREEN}Creating LXC container...${NC}"
-pct create $CTID $TEMPLATE \
-    --hostname $HOSTNAME \
+pct create $CTID "$TEMPLATE" \
+    --hostname "$CT_HOSTNAME" \
     --memory $MEMORY \
     --swap $SWAP \
     --cores $CORES \
@@ -142,8 +155,8 @@ pct create $CTID $TEMPLATE \
     --features nesting=1 \
     --onboot 1 \
     --ssh-public-keys /root/.ssh/authorized_keys 2>/dev/null || \
-pct create $CTID $TEMPLATE \
-    --hostname $HOSTNAME \
+pct create $CTID "$TEMPLATE" \
+    --hostname "$CT_HOSTNAME" \
     --memory $MEMORY \
     --swap $SWAP \
     --cores $CORES \
@@ -306,7 +319,7 @@ echo -e "${GREEN}Deployment Complete!${NC}"
 echo -e "${GREEN}======================================${NC}"
 echo ""
 echo -e "Container ID: ${BLUE}$CTID${NC}"
-echo -e "Hostname: ${BLUE}$HOSTNAME${NC}"
+echo -e "Hostname: ${BLUE}$CT_HOSTNAME${NC}"
 echo -e "IP Address: ${BLUE}$CONTAINER_IP${NC}"
 echo -e "Application URL: ${BLUE}http://$CONTAINER_IP:$APP_PORT${NC}"
 echo ""
