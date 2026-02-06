@@ -29,11 +29,59 @@ find_next_ctid() {
     exit 1
 }
 
+# Function to find available storage for containers
+find_container_storage() {
+    # Try to find storage that supports containers (rootdir)
+    local storage=$(pvesm status -content rootdir 2>/dev/null | awk 'NR>1 && $2=="active" {print $1; exit}')
+
+    if [ -z "$storage" ]; then
+        # Fallback: try common storage names
+        for s in local-lxc local data; do
+            if pvesm status | grep -q "^$s "; then
+                echo "$s"
+                return
+            fi
+        done
+
+        # Last resort: use first active storage
+        storage=$(pvesm status 2>/dev/null | awk 'NR>1 && $2=="active" {print $1; exit}')
+    fi
+
+    if [ -z "$storage" ]; then
+        echo -e "${RED}Error: Could not find suitable storage for containers${NC}" >&2
+        echo -e "${YELLOW}Available storage:${NC}" >&2
+        pvesm status >&2
+        exit 1
+    fi
+
+    echo "$storage"
+}
+
+# Function to find Debian template
+find_debian_template() {
+    # Look for Debian 12 template
+    local template=$(pveam available | grep -i "debian-12.*standard" | head -1 | awk '{print $2}')
+
+    if [ -z "$template" ]; then
+        # Try any Debian template
+        template=$(pveam list local 2>/dev/null | grep -i debian | head -1 | awk '{print $1":"$2}')
+    fi
+
+    if [ -z "$template" ]; then
+        echo -e "${RED}Error: No Debian template found${NC}" >&2
+        echo -e "${YELLOW}Please download a template first with: pveam download local debian-12-standard_12.2-1_amd64.tar.zst${NC}" >&2
+        echo -e "${YELLOW}Or see available templates with: pveam available${NC}" >&2
+        exit 1
+    fi
+
+    echo "$template"
+}
+
 # Configuration
 HOSTNAME="${1:-phonebook}"                  # Container hostname
 CTID=$(find_next_ctid)                      # Auto-detect next available container ID
-STORAGE="local-lxc"                         # Storage for container root
-TEMPLATE="local:vztmpl/debian-12-standard_12.2-1_amd64.tar.zst"  # Debian 12 template
+STORAGE=$(find_container_storage)           # Auto-detect storage for container root
+TEMPLATE=$(find_debian_template)            # Auto-detect Debian template
 MEMORY=2048                                 # RAM in MB
 SWAP=512                                    # Swap in MB
 DISK_SIZE=8                                 # Disk size in GB
@@ -62,6 +110,8 @@ fi
 
 echo -e "${GREEN}Auto-detected next available container ID: ${CTID}${NC}"
 echo -e "${GREEN}Using hostname: ${HOSTNAME}${NC}"
+echo -e "${GREEN}Using storage: ${STORAGE}${NC}"
+echo -e "${GREEN}Using template: ${TEMPLATE}${NC}"
 echo ""
 
 echo -e "${GREEN}Creating LXC container...${NC}"
