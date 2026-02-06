@@ -1,5 +1,6 @@
 // API Configuration
-const API_BASE_URL = 'http://localhost:8000/api';
+// Use relative URL to work with any hostname
+const API_BASE_URL = '/api';
 
 // DOM Elements
 const contactForm = document.getElementById('contactForm');
