@@ -6,8 +6,53 @@
 # Usage: ./deploy-proxmox.sh [hostname]
 # Example: ./deploy-proxmox.sh phonebook
 # If no hostname is provided, "phonebook" will be used
+#
+# This script leverages the community-scripts/ProxmoxVE project for storage
+# and template detection: https://github.com/community-scripts/ProxmoxVE
 
 set -e
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Configuration
+HOSTNAME="${1:-phonebook}"
+GITHUB_REPO="https://github.com/matspi/yealink_phonebook.git"
+MEMORY=2048
+SWAP=512
+DISK_SIZE=8
+CORES=2
+NETWORK_BRIDGE="vmbr0"
+APP_PORT=8000
+
+echo -e "${GREEN}======================================${NC}"
+echo -e "${GREEN}Proxmox LXC Deployment Script${NC}"
+echo -e "${GREEN}Phonebook Application${NC}"
+echo -e "${GREEN}======================================${NC}"
+echo ""
+
+# Check if running on Proxmox
+if ! command -v pct &> /dev/null; then
+    echo -e "${RED}Error: This script must be run on a Proxmox host${NC}"
+    exit 1
+fi
+
+# Download community-scripts helper functions
+echo -e "${BLUE}Loading Proxmox helper functions...${NC}"
+TEMP_BUILD_FUNC=$(mktemp)
+trap "rm -f $TEMP_BUILD_FUNC" EXIT
+
+if ! curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func -o "$TEMP_BUILD_FUNC"; then
+    echo -e "${RED}Error: Failed to download helper functions${NC}"
+    exit 1
+fi
+
+# Source the community-scripts build functions
+source "$TEMP_BUILD_FUNC"
 
 # Function to find next available container ID (cluster-wide)
 find_next_ctid() {
@@ -29,89 +74,60 @@ find_next_ctid() {
     exit 1
 }
 
-# Function to find available storage for containers
+# Function to find available storage for containers (using community-scripts approach)
 find_container_storage() {
-    # Try to find storage that supports containers (rootdir)
-    local storage=$(pvesm status -content rootdir 2>/dev/null | awk 'NR>1 && $2=="active" {print $1; exit}')
+    local storage=$(pvesm status -content rootdir 2>/dev/null | awk 'NR>1 {print $1; exit}')
 
     if [ -z "$storage" ]; then
-        # Fallback: try common storage names
-        for s in local-lxc local data; do
-            if pvesm status | grep -q "^$s "; then
-                echo "$s"
-                return
-            fi
-        done
-
-        # Last resort: use first active storage
-        storage=$(pvesm status 2>/dev/null | awk 'NR>1 && $2=="active" {print $1; exit}')
-    fi
-
-    if [ -z "$storage" ]; then
-        echo -e "${RED}Error: Could not find suitable storage for containers${NC}" >&2
+        echo -e "${RED}Error: No storage found that supports containers (rootdir content)${NC}" >&2
         echo -e "${YELLOW}Available storage:${NC}" >&2
         pvesm status >&2
+        echo ""
+        echo -e "${YELLOW}To enable container storage, you need to:${NC}" >&2
+        echo -e "  1. Go to Proxmox UI: Datacenter → Storage → Add" >&2
+        echo -e "  2. Or enable 'Container' content type on existing storage" >&2
+        echo -e "  3. Common options: Directory, ZFS, LVM-Thin" >&2
         exit 1
     fi
 
     echo "$storage"
 }
 
-# Function to find Debian template
+# Function to find Debian template (using community-scripts approach)
 find_debian_template() {
-    # Look for Debian 12 template
-    local template=$(pveam available | grep -i "debian-12.*standard" | head -1 | awk '{print $2}')
+    local template_storage=$(pvesm status -content vztmpl 2>/dev/null | awk 'NR>1 {print $1; exit}')
 
-    if [ -z "$template" ]; then
-        # Try any Debian template
-        template=$(pveam list local 2>/dev/null | grep -i debian | head -1 | awk '{print $1":"$2}')
+    if [ -z "$template_storage" ]; then
+        template_storage="local"
     fi
+
+    # Look for Debian template
+    local template=$(pveam list "$template_storage" 2>/dev/null | grep -i "debian.*standard" | head -1 | awk '{print $2}')
 
     if [ -z "$template" ]; then
         echo -e "${RED}Error: No Debian template found${NC}" >&2
-        echo -e "${YELLOW}Please download a template first with: pveam download local debian-12-standard_12.2-1_amd64.tar.zst${NC}" >&2
-        echo -e "${YELLOW}Or see available templates with: pveam available${NC}" >&2
+        echo -e "${YELLOW}To download Debian 12 template, run:${NC}" >&2
+        echo -e "  pveam update" >&2
+        echo -e "  pveam download ${template_storage} debian-12-standard_12.12-1_amd64.tar.zst" >&2
         exit 1
     fi
 
-    echo "$template"
+    echo "${template_storage}:vztmpl/${template}"
 }
 
-# Configuration
-HOSTNAME="${1:-phonebook}"                  # Container hostname
-CTID=$(find_next_ctid)                      # Auto-detect next available container ID
-STORAGE=$(find_container_storage)           # Auto-detect storage for container root
-TEMPLATE=$(find_debian_template)            # Auto-detect Debian template
-MEMORY=2048                                 # RAM in MB
-SWAP=512                                    # Swap in MB
-DISK_SIZE=8                                 # Disk size in GB
-CORES=2                                     # CPU cores
-NETWORK_BRIDGE="vmbr0"                      # Network bridge
-APP_PORT=8000                               # Application port
-GITHUB_REPO="https://github.com/matspi/yealink_phonebook.git"  # UPDATE THIS!
+# Auto-detect configuration
+CTID=$(find_next_ctid)
+STORAGE=$(find_container_storage)
+TEMPLATE=$(find_debian_template)
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
-
-echo -e "${GREEN}======================================${NC}"
-echo -e "${GREEN}Proxmox LXC Deployment Script${NC}"
-echo -e "${GREEN}Phonebook Application${NC}"
-echo -e "${GREEN}======================================${NC}"
-echo ""
-
-# Check if running on Proxmox
-if ! command -v pct &> /dev/null; then
-    echo -e "${RED}Error: This script must be run on a Proxmox host${NC}"
-    exit 1
-fi
-
-echo -e "${GREEN}Auto-detected next available container ID: ${CTID}${NC}"
-echo -e "${GREEN}Using hostname: ${HOSTNAME}${NC}"
-echo -e "${GREEN}Using storage: ${STORAGE}${NC}"
-echo -e "${GREEN}Using template: ${TEMPLATE}${NC}"
+echo -e "${GREEN}Configuration:${NC}"
+echo -e "  Container ID: ${BLUE}${CTID}${NC}"
+echo -e "  Hostname: ${BLUE}${HOSTNAME}${NC}"
+echo -e "  Storage: ${BLUE}${STORAGE}${NC}"
+echo -e "  Template: ${BLUE}${TEMPLATE}${NC}"
+echo -e "  Memory: ${BLUE}${MEMORY}MB${NC}"
+echo -e "  Disk: ${BLUE}${DISK_SIZE}GB${NC}"
+echo -e "  Cores: ${BLUE}${CORES}${NC}"
 echo ""
 
 echo -e "${GREEN}Creating LXC container...${NC}"
@@ -125,13 +141,23 @@ pct create $CTID $TEMPLATE \
     --unprivileged 1 \
     --features nesting=1 \
     --onboot 1 \
-    --ssh-public-keys /root/.ssh/authorized_keys
+    --ssh-public-keys /root/.ssh/authorized_keys 2>/dev/null || \
+pct create $CTID $TEMPLATE \
+    --hostname $HOSTNAME \
+    --memory $MEMORY \
+    --swap $SWAP \
+    --cores $CORES \
+    --rootfs $STORAGE:$DISK_SIZE \
+    --net0 name=eth0,bridge=$NETWORK_BRIDGE,ip=dhcp \
+    --unprivileged 1 \
+    --features nesting=1 \
+    --onboot 1
 
 echo -e "${GREEN}Starting container...${NC}"
 pct start $CTID
 
 # Wait for container to be ready
-echo "Waiting for container to boot..."
+echo -e "${BLUE}Waiting for container to boot...${NC}"
 sleep 5
 
 echo -e "${GREEN}Updating system packages...${NC}"
@@ -154,7 +180,6 @@ echo -e "${GREEN}Creating application directory...${NC}"
 pct exec $CTID -- bash -c "mkdir -p /opt/phonebook /opt/phonebook/data && chown -R phonebook:phonebook /opt/phonebook"
 
 echo -e "${GREEN}Cloning application from GitHub...${NC}"
-echo -e "${YELLOW}Make sure to update GITHUB_REPO variable in this script!${NC}"
 pct exec $CTID -- bash -c "cd /opt/phonebook && sudo -u phonebook git clone $GITHUB_REPO app"
 
 echo -e "${GREEN}Setting up Python virtual environment...${NC}"
@@ -233,7 +258,7 @@ systemctl stop phonebook
 echo -e "${GREEN}Pulling latest code from GitHub...${NC}"
 cd "$APP_DIR"
 sudo -u phonebook git fetch --all
-sudo -u phonebook git reset --hard origin/main || sudo -u phonebook git reset --hard origin/master
+sudo -u phonebook git reset --hard origin/main || sudo -u phonebook git reset --hard origin/master || sudo -u phonebook git reset --hard origin/develop
 
 # Update dependencies
 echo -e "${GREEN}Updating Python dependencies...${NC}"
@@ -275,26 +300,21 @@ sleep 3
 # Get container IP
 CONTAINER_IP=$(pct exec $CTID -- hostname -I | awk '{print $1}')
 
+echo ""
 echo -e "${GREEN}======================================${NC}"
 echo -e "${GREEN}Deployment Complete!${NC}"
 echo -e "${GREEN}======================================${NC}"
 echo ""
-echo -e "Container ID: ${GREEN}$CTID${NC}"
-echo -e "Hostname: ${GREEN}$HOSTNAME${NC}"
-echo -e "IP Address: ${GREEN}$CONTAINER_IP${NC}"
-echo -e "Application URL: ${GREEN}http://$CONTAINER_IP:$APP_PORT${NC}"
+echo -e "Container ID: ${BLUE}$CTID${NC}"
+echo -e "Hostname: ${BLUE}$HOSTNAME${NC}"
+echo -e "IP Address: ${BLUE}$CONTAINER_IP${NC}"
+echo -e "Application URL: ${BLUE}http://$CONTAINER_IP:$APP_PORT${NC}"
 echo ""
-echo -e "${YELLOW}To update the application in the future:${NC}"
-echo -e "  pct exec $CTID -- update"
-echo -e "  ${GREEN}or${NC}"
-echo -e "  Enter the container: ${GREEN}pct enter $CTID${NC}"
-echo -e "  Run update script: ${GREEN}update${NC}"
+echo -e "${YELLOW}Useful Commands:${NC}"
+echo -e "  Update application: ${BLUE}pct exec $CTID -- update${NC}"
+echo -e "  Check status: ${BLUE}pct exec $CTID -- systemctl status phonebook${NC}"
+echo -e "  View logs: ${BLUE}pct exec $CTID -- journalctl -u phonebook -f${NC}"
+echo -e "  Enter container: ${BLUE}pct enter $CTID${NC}"
 echo ""
-echo -e "${YELLOW}To check service status:${NC}"
-echo -e "  pct exec $CTID -- systemctl status phonebook"
-echo ""
-echo -e "${YELLOW}To view logs:${NC}"
-echo -e "  pct exec $CTID -- journalctl -u phonebook -f"
-echo ""
-echo -e "${GREEN}Don't forget to update the GITHUB_REPO variable in this script!${NC}"
+echo -e "${GREEN}Configuration sourced from community-scripts/ProxmoxVE${NC}"
 echo ""
