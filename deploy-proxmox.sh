@@ -177,15 +177,18 @@ echo -e "${GREEN}Updating system packages...${NC}"
 pct exec $CTID -- bash -c "apt-get update && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y"
 
 echo -e "${GREEN}Installing required packages...${NC}"
-pct exec $CTID -- bash -c "DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+pct exec $CTID -- bash -c "DEBIAN_FRONTEND=noninteractive apt-get install -y \
     python3 \
     python3-pip \
     python3-venv \
     git \
     curl \
     sqlite3 \
-    sudo \
-    systemd"
+    sudo"
+
+echo -e "${GREEN}Setting up root password for console access...${NC}"
+pct exec $CTID -- bash -c "echo 'root:phonebook' | chpasswd"
+echo -e "${YELLOW}Root password set to: phonebook (change this after login!)${NC}"
 
 echo -e "${GREEN}Creating application user...${NC}"
 pct exec $CTID -- bash -c "useradd -m -s /bin/bash phonebook || true"
@@ -212,9 +215,10 @@ After=network.target
 Type=simple
 User=phonebook
 Group=phonebook
-WorkingDirectory=/opt/phonebook/app
+WorkingDirectory=/opt/phonebook/app/backend
 Environment="DATABASE_URL=sqlite:////opt/phonebook/data/phonebook.db"
-ExecStart=/opt/phonebook/app/venv/bin/uvicorn backend.main:app --host 0.0.0.0 --port 8000
+Environment="PYTHONPATH=/opt/phonebook/app/backend"
+ExecStart=/opt/phonebook/app/venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000
 Restart=always
 RestartSec=10
 
@@ -309,10 +313,27 @@ pct exec $CTID -- systemctl enable phonebook
 pct exec $CTID -- systemctl start phonebook
 
 # Wait for service to start
-sleep 3
+sleep 5
 
 # Get container IP
 CONTAINER_IP=$(pct exec $CTID -- hostname -I | awk '{print $1}')
+
+# Verify service is running
+echo -e "${BLUE}Verifying deployment...${NC}"
+if pct exec $CTID -- systemctl is-active --quiet phonebook; then
+    echo -e "${GREEN}✓ Service is running${NC}"
+
+    # Test if API is responding
+    if pct exec $CTID -- curl -s http://localhost:8000/api | grep -q "ok"; then
+        echo -e "${GREEN}✓ API is responding${NC}"
+    else
+        echo -e "${YELLOW}⚠ API test failed, but service is running${NC}"
+    fi
+else
+    echo -e "${RED}✗ Service is not running!${NC}"
+    echo -e "${YELLOW}Checking logs:${NC}"
+    pct exec $CTID -- journalctl -u phonebook -n 20 --no-pager
+fi
 
 echo ""
 echo -e "${GREEN}======================================${NC}"
@@ -322,13 +343,26 @@ echo ""
 echo -e "Container ID: ${BLUE}$CTID${NC}"
 echo -e "Hostname: ${BLUE}$CT_HOSTNAME${NC}"
 echo -e "IP Address: ${BLUE}$CONTAINER_IP${NC}"
-echo -e "Application URL: ${BLUE}http://$CONTAINER_IP:$APP_PORT${NC}"
+echo -e "Root Password: ${YELLOW}phonebook${NC} (please change!)"
+echo ""
+echo -e "${GREEN}Access URLs:${NC}"
+echo -e "  Web Frontend: ${BLUE}http://$CONTAINER_IP:$APP_PORT/${NC}"
+echo -e "  API Docs: ${BLUE}http://$CONTAINER_IP:$APP_PORT/docs${NC}"
+echo -e "  Yealink XML: ${BLUE}http://$CONTAINER_IP:$APP_PORT/yealink/phonebook.xml${NC}"
 echo ""
 echo -e "${YELLOW}Useful Commands:${NC}"
 echo -e "  Update application: ${BLUE}pct exec $CTID -- update${NC}"
 echo -e "  Check status: ${BLUE}pct exec $CTID -- systemctl status phonebook${NC}"
 echo -e "  View logs: ${BLUE}pct exec $CTID -- journalctl -u phonebook -f${NC}"
 echo -e "  Enter container: ${BLUE}pct enter $CTID${NC}"
+echo ""
+echo -e "${YELLOW}Troubleshooting:${NC}"
+echo -e "  If frontend not accessible, check logs:"
+echo -e "    ${BLUE}pct exec $CTID -- journalctl -u phonebook -n 50${NC}"
+echo -e "  Check if service is running:"
+echo -e "    ${BLUE}pct exec $CTID -- systemctl status phonebook${NC}"
+echo -e "  Test API directly:"
+echo -e "    ${BLUE}curl http://$CONTAINER_IP:$APP_PORT/api${NC}"
 echo ""
 echo -e "${GREEN}Configuration sourced from community-scripts/ProxmoxVE${NC}"
 echo ""
