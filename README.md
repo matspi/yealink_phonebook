@@ -144,30 +144,27 @@ We provide an automated deployment script that creates and configures an LXC con
 
 **Steps:**
 
-1. **Copy the deployment script to your Proxmox host:**
-```bash
-scp deploy-proxmox.sh root@your-proxmox-host:/root/
-```
-
-2. **Edit the script to set your GitHub repository URL:**
+1. **Run this one-liner on your Proxmox host:**
 
 ```bash
-# In deploy-proxmox.sh, update this line:
-GITHUB_REPO="https://github.com/YOUR_USERNAME/spiller_phonebook.git"
+# Quick deployment with auto-detected container ID and default hostname "phonebook"
+curl -fsSL https://raw.githubusercontent.com/YOUR_USERNAME/spiller_phonebook/main/deploy-proxmox.sh | bash
+
+# With custom hostname:
+curl -fsSL https://raw.githubusercontent.com/YOUR_USERNAME/spiller_phonebook/main/deploy-proxmox.sh | bash -s -- myphonebook
 ```
 
-3. **Run the deployment script on the Proxmox host:**
+The script automatically finds the next available container ID (starting from 100).
 
-```bash
-chmod +x deploy-proxmox.sh
-./deploy-proxmox.sh [container-id] [hostname]
+**Note:** Make sure to:
 
-# Example:
-./deploy-proxmox.sh 200 phonebook
-```
+- Replace `YOUR_USERNAME` with your GitHub username
+- Update the branch name if you're not using `main` (could be `master` or `develop`)
+- Update the `GITHUB_REPO` variable in [deploy-proxmox.sh](deploy-proxmox.sh) before committing to GitHub
 
 The script will:
 
+- Auto-detect the next available container ID (100-999)
 - Create a new LXC container with Debian 12
 - Install Python 3, git, and dependencies
 - Clone your application from GitHub
@@ -189,12 +186,14 @@ Inside the LXC container, we provide an `update` script that pulls the latest co
 
 **From the Proxmox host:**
 ```bash
-pct exec 200 -- update
+# Replace CTID with your actual container ID
+pct exec CTID -- update
 ```
 
 **Or enter the container and run:**
 ```bash
-pct enter 200
+# Replace CTID with your actual container ID
+pct enter CTID
 update
 ```
 
@@ -210,23 +209,23 @@ The update script will:
 
 **Check service status:**
 ```bash
-pct exec 200 -- systemctl status phonebook
+pct exec CTID -- systemctl status phonebook
 ```
 
 **View logs:**
 ```bash
-pct exec 200 -- journalctl -u phonebook -f
+pct exec CTID -- journalctl -u phonebook -f
 ```
 
 **Restart service:**
 ```bash
-pct exec 200 -- systemctl restart phonebook
+pct exec CTID -- systemctl restart phonebook
 ```
 
 **Database backups location:**
 ```bash
 # Backups are stored in: /opt/phonebook/backups/
-pct exec 200 -- ls -lh /opt/phonebook/backups/
+pct exec CTID -- ls -lh /opt/phonebook/backups/
 ```
 
 ### Manual Deployment Options

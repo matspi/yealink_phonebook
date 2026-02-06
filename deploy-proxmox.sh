@@ -3,14 +3,31 @@
 # Proxmox LXC Deployment Script for Phonebook Application
 # Run this script on your Proxmox host to create and configure the LXC container
 #
-# Usage: ./deploy-proxmox.sh [container-id] [hostname]
-# Example: ./deploy-proxmox.sh 200 phonebook
+# Usage: ./deploy-proxmox.sh [hostname]
+# Example: ./deploy-proxmox.sh phonebook
+# If no hostname is provided, "phonebook" will be used
 
 set -e
 
+# Function to find next available container ID
+find_next_ctid() {
+    local start_id=100
+    local max_id=999
+
+    for ((id=start_id; id<=max_id; id++)); do
+        if ! pct status $id &> /dev/null; then
+            echo $id
+            return
+        fi
+    done
+
+    echo -e "${RED}Error: No available container IDs found between $start_id and $max_id${NC}" >&2
+    exit 1
+}
+
 # Configuration
-CTID="${1:-200}"                           # Container ID
-HOSTNAME="${2:-phonebook}"                  # Container hostname
+HOSTNAME="${1:-phonebook}"                  # Container hostname
+CTID=$(find_next_ctid)                      # Auto-detect next available container ID
 STORAGE="local-lxc"                         # Storage for container root
 TEMPLATE="local:vztmpl/debian-12-standard_12.2-1_amd64.tar.zst"  # Debian 12 template
 MEMORY=2048                                 # RAM in MB
@@ -39,19 +56,9 @@ if ! command -v pct &> /dev/null; then
     exit 1
 fi
 
-# Check if container already exists
-if pct status $CTID &> /dev/null; then
-    echo -e "${YELLOW}Warning: Container $CTID already exists${NC}"
-    read -p "Do you want to destroy and recreate it? (yes/no): " -r
-    if [[ $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
-        echo "Stopping and destroying container $CTID..."
-        pct stop $CTID 2>/dev/null || true
-        pct destroy $CTID
-    else
-        echo "Aborting."
-        exit 1
-    fi
-fi
+echo -e "${GREEN}Auto-detected next available container ID: ${CTID}${NC}"
+echo -e "${GREEN}Using hostname: ${HOSTNAME}${NC}"
+echo ""
 
 echo -e "${GREEN}Creating LXC container...${NC}"
 pct create $CTID $TEMPLATE \
