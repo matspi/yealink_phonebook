@@ -148,17 +148,16 @@ We provide an automated deployment script that creates and configures an LXC con
 
 ```bash
 # Quick deployment with auto-detected container ID and default hostname "phonebook"
-curl -fsSL https://raw.githubusercontent.com/YOUR_USERNAME/spiller_phonebook/main/deploy-proxmox.sh | bash
+curl -fsSL https://raw.githubusercontent.com/matspi/yealink_phonebook/main/deploy-proxmox.sh | bash
 
 # With custom hostname:
-curl -fsSL https://raw.githubusercontent.com/YOUR_USERNAME/spiller_phonebook/main/deploy-proxmox.sh | bash -s -- myphonebook
+curl -fsSL https://raw.githubusercontent.com/matspi/yealink_phonebook/main/deploy-proxmox.sh | bash -s -- myphonebook
 ```
 
 The script automatically finds the next available container ID (starting from 100).
 
 **Note:** Make sure to:
 
-- Replace `YOUR_USERNAME` with your GitHub username
 - Update the branch name if you're not using `main` (could be `master` or `develop`)
 - Update the `GITHUB_REPO` variable in [deploy-proxmox.sh](deploy-proxmox.sh) before committing to GitHub
 

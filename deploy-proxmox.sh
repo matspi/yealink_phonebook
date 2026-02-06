@@ -9,13 +9,17 @@
 
 set -e
 
-# Function to find next available container ID
+# Function to find next available container ID (cluster-wide)
 find_next_ctid() {
     local start_id=100
     local max_id=999
 
+    # Get list of all existing container IDs from all nodes in the cluster
+    local existing_ids=$(pvesh get /cluster/resources --type vm --output-format json 2>/dev/null | grep -oP '"vmid":\s*\K\d+' | sort -n || pct list | awk 'NR>1 {print $1}' | sort -n)
+
     for ((id=start_id; id<=max_id; id++)); do
-        if ! pct status $id &> /dev/null; then
+        # Check if ID exists in the list
+        if ! echo "$existing_ids" | grep -q "^${id}$"; then
             echo $id
             return
         fi
@@ -71,7 +75,7 @@ pct create $CTID $TEMPLATE \
     --unprivileged 1 \
     --features nesting=1 \
     --onboot 1 \
-    --password
+    --ssh-public-keys /root/.ssh/authorized_keys
 
 echo -e "${GREEN}Starting container...${NC}"
 pct start $CTID
