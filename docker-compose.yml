@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  phonebook:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - phonebook-data:/data
+      - ./frontend:/app/frontend
+    environment:
+      - DATABASE_URL=sqlite:////data/phonebook.db
+    restart: unless-stopped
+
+volumes:
+  phonebook-data:

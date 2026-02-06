@@ -1,0 +1,38 @@
+name: Claude Code
+
+on:
+  issues:
+    types: [opened, labeled]
+
+jobs:
+  claude-code:
+    if: contains(github.event.issue.labels.*.name, 'claude-code')
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Add comment
+      uses: actions/github-script@v7
+      with:
+        script: |
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: 'Claude Code workflow triggered! This is a placeholder for Claude Code integration. To fully integrate Claude Code with GitHub Issues, you would need to set up the Claude Code API integration with proper authentication and handlers.'
+          })
+
+    - name: Extract issue content
+      id: issue
+      run: |
+        echo "title=${{ github.event.issue.title }}" >> $GITHUB_OUTPUT
+        echo "body<<EOF" >> $GITHUB_OUTPUT
+        echo "${{ github.event.issue.body }}" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
+    # TODO: Add actual Claude Code integration here
+    # This would require:
+    # 1. Claude API credentials stored in secrets
+    # 2. Integration script to process the issue and create a PR
+    # 3. Proper error handling and status updates
