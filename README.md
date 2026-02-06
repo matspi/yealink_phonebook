@@ -31,8 +31,8 @@ A lightweight web application for maintaining a phonebook with support for Yeali
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/spiller_phonebook.git
-cd spiller_phonebook
+git clone https://github.com/matspi/yealink_phonebook.git
+cd yealink_phonebook
 ```
 
 2. Start the application:
@@ -95,7 +95,7 @@ Then access http://localhost:8080
 ### Project Structure
 
 ```
-spiller_phonebook/
+yealink_phonebook/
 ├── backend/
 │   ├── main.py           # FastAPI application
 │   ├── models.py         # SQLAlchemy models
@@ -132,7 +132,108 @@ export DATABASE_URL=sqlite:////path/to/your/database.db
 
 ## Deployment to Proxmox LXC
 
-### Option 1: Docker in LXC
+### Automated Deployment (Recommended)
+
+We provide an automated deployment script that creates and configures an LXC container with everything set up.
+
+**Prerequisites:**
+
+- Proxmox VE host
+- Debian 12 LXC template downloaded
+- Network configured (DHCP or static IP)
+
+**Steps:**
+
+1. **Copy the deployment script to your Proxmox host:**
+```bash
+scp deploy-proxmox.sh root@your-proxmox-host:/root/
+```
+
+2. **Edit the script to set your GitHub repository URL:**
+
+```bash
+# In deploy-proxmox.sh, update this line:
+GITHUB_REPO="https://github.com/YOUR_USERNAME/spiller_phonebook.git"
+```
+
+3. **Run the deployment script on the Proxmox host:**
+
+```bash
+chmod +x deploy-proxmox.sh
+./deploy-proxmox.sh [container-id] [hostname]
+
+# Example:
+./deploy-proxmox.sh 200 phonebook
+```
+
+The script will:
+
+- Create a new LXC container with Debian 12
+- Install Python 3, git, and dependencies
+- Clone your application from GitHub
+- Set up a Python virtual environment
+- Create a systemd service for auto-start
+- Install an `update` command for easy updates
+- Start the application automatically
+
+4. **Access your application:**
+
+```bash
+# The script will display the container IP, for example:
+# Application URL: http://192.168.1.100:8000
+```
+
+### Updating the Application
+
+Inside the LXC container, we provide an `update` script that pulls the latest code and restarts the service:
+
+**From the Proxmox host:**
+```bash
+pct exec 200 -- update
+```
+
+**Or enter the container and run:**
+```bash
+pct enter 200
+update
+```
+
+The update script will:
+
+- Backup the current database
+- Pull the latest code from GitHub (main/master branch)
+- Update Python dependencies
+- Restart the service
+- Automatically rollback if the update fails
+
+### Managing the Service
+
+**Check service status:**
+```bash
+pct exec 200 -- systemctl status phonebook
+```
+
+**View logs:**
+```bash
+pct exec 200 -- journalctl -u phonebook -f
+```
+
+**Restart service:**
+```bash
+pct exec 200 -- systemctl restart phonebook
+```
+
+**Database backups location:**
+```bash
+# Backups are stored in: /opt/phonebook/backups/
+pct exec 200 -- ls -lh /opt/phonebook/backups/
+```
+
+### Manual Deployment Options
+
+If you prefer manual deployment or need a different setup:
+
+#### Option 1: Docker in LXC
 
 1. Create a new LXC container (Ubuntu 22.04 recommended)
 2. Make it privileged or enable nesting: `Features → Nesting`
@@ -144,12 +245,12 @@ sh get-docker.sh
 
 4. Clone and run the application:
 ```bash
-git clone https://github.com/yourusername/spiller_phonebook.git
-cd spiller_phonebook
+git clone https://github.com/matspi/yealink_phonebook.git
+cd yealink_phonebook
 docker-compose up -d
 ```
 
-### Option 2: Direct Installation
+#### Option 2: Direct Installation
 
 1. Create a new LXC container (Ubuntu 22.04)
 2. Install Python:
@@ -160,8 +261,8 @@ apt install python3.11 python3-pip -y
 
 3. Clone and setup:
 ```bash
-git clone https://github.com/yourusername/spiller_phonebook.git
-cd spiller_phonebook/backend
+git clone https://github.com/matspi/yealink_phonebook.git
+cd yealink_phonebook/backend
 pip install -r requirements.txt
 ```
 
@@ -174,7 +275,7 @@ After=network.target
 [Service]
 Type=simple
 User=www-data
-WorkingDirectory=/opt/spiller_phonebook/backend
+WorkingDirectory=/opt/yealink_phonebook/backend
 Environment="DATABASE_URL=sqlite:////var/lib/phonebook/phonebook.db"
 ExecStart=/usr/local/bin/uvicorn main:app --host 0.0.0.0 --port 8000
 Restart=always
