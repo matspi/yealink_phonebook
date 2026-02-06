@@ -184,6 +184,7 @@ pct exec $CTID -- bash -c "DEBIAN_FRONTEND=noninteractive apt-get install -y \
     git \
     curl \
     sqlite3 \
+    sudo \
     systemd"
 
 echo -e "${GREEN}Creating application user...${NC}"
