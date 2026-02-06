@@ -177,7 +177,7 @@ echo -e "${GREEN}Updating system packages...${NC}"
 pct exec $CTID -- bash -c "apt-get update && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y"
 
 echo -e "${GREEN}Installing required packages...${NC}"
-pct exec $CTID -- bash -c "DEBIAN_FRONTEND=noninteractive apt-get install -y \
+pct exec $CTID -- bash -c "DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     python3 \
     python3-pip \
     python3-venv \
